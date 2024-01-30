@@ -309,7 +309,7 @@ export async function getUser(email: string) {
 
 export async function getPost(slug: string) {
   noStore();
-  console.log(`'${slug}'`);
+  // console.log(`'${slug}'`);
 
   // let postSlug = slug;
   try {

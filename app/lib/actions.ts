@@ -163,7 +163,7 @@ export async function latestPostId(title) {
     const id = latestPostId.rows.map((id) => ({
       ...id,
     }));
-    console.log(id[0]);
+    // console.log(id[0]);
     return id[0];
   } catch (error) {
     return {
@@ -187,7 +187,7 @@ export async function createPost(prevState: State, formData: FormData) {
   try {
     const path = join(process.env.ROOT_DIR || process.cwd(), '/public/uploads/', fileHandler.name)
     await writeFile(path, buffer)
-    console.log('open ${path} to see the uploaded file')
+    // console.log('open ${path} to see the uploaded file')
   } catch (e: any) {
     console.error(e);
     reject(e);
@@ -230,7 +230,7 @@ export async function createPost(prevState: State, formData: FormData) {
   }
 
   const lpId = await latestPostId(title);
-  console.log(lpId.id);
+  // console.log(lpId.id);
   // console.log(fileHandler.name);
   try {
     await sql`
