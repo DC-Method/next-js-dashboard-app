@@ -2,9 +2,11 @@ import { sql } from '@vercel/postgres';
 import { unstable_noStore as noStore } from 'next/cache';
 import {
   CustomerField,
+  UserField,
   CustomersTableType,
   InvoiceForm,
   InvoicesTable,
+  PostsTable,
   LatestInvoiceRaw,
   User,
   Revenue,
@@ -130,6 +132,34 @@ export async function fetchFilteredInvoices(
   }
 }
 
+export async function fetchFilteredPosts(
+  query: string,
+  currentPage: number,
+) {
+  noStore();
+  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
+  try {
+    const posts = await sql<PostsTable>`
+      SELECT
+        posts.id,
+        post_meta.post_title
+      FROM posts
+      JOIN post_meta ON posts.id = post_meta.post_id
+      WHERE
+        post_meta.post_title ILIKE ${`%${query}%`}
+      ORDER BY posts.date_created DESC
+      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
+    `;
+
+    return posts.rows;
+    // return "No posts found.";
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch posts.');
+  }
+}
+
 export async function fetchInvoicesPages(query: string) {
   noStore();
   try {
@@ -149,6 +179,24 @@ export async function fetchInvoicesPages(query: string) {
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch total number of invoices.');
+  }
+}
+
+export async function fetchPostsPages(query: string) {
+  noStore();
+  try {
+    const count = await sql`SELECT COUNT(*)
+    FROM posts
+    JOIN post_meta ON posts.id = post_meta.post_id
+    WHERE
+      post_meta.post_title ILIKE ${`%${query}%`}
+  `;
+
+    const totalPages = Math.ceil(Number(count.rows[0].count) / ITEMS_PER_PAGE);
+    return totalPages;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch total number of posts.');
   }
 }
 
@@ -196,6 +244,24 @@ export async function fetchCustomers() {
   }
 }
 
+export async function fetchUsers() {
+  try {
+    const data = await sql<UserField>`
+      SELECT
+        id,
+        name
+      FROM users
+      ORDER BY name ASC
+    `;
+
+    const users = data.rows;
+    return users;
+  } catch (err) {
+    console.error('Database Error:', err);
+    throw new Error('Failed to fetch users.');
+  }
+}
+
 export async function fetchFilteredCustomers(query: string) {
   noStore();
   try {
@@ -237,5 +303,31 @@ export async function getUser(email: string) {
   } catch (error) {
     console.error('Failed to fetch user:', error);
     throw new Error('Failed to fetch user.');
+  }
+}
+
+
+export async function getPost(slug: string) {
+  noStore();
+  console.log(`'${slug}'`);
+
+  // let postSlug = slug;
+  try {
+    const post = await sql`SELECT 
+    b.post_title,
+    b.meta_title,
+    b.meta_description,
+    b.header_image_url,
+    c.name
+    FROM posts a 
+    JOIN post_meta b on a.id = b.post_id
+    JOIN users c on a.user_id = c.id  
+    WHERE a.slug=${slug}`;
+    
+    // console.log(post.rows);
+    return post.rows[0];
+  } catch (error) {
+    console.error('Failed to fetch post:', error);
+    throw new Error('Failed to fetch post.');
   }
 }

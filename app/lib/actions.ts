@@ -6,6 +6,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
+import * as dateFn from 'date-fns';
+import mime from 'mime';
+import { PostsForm } from './definitions';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -20,9 +25,30 @@ const FormSchema = z.object({
   }),
   date: z.string(),
 });
+
+const PostFormSchema = z.object({
+  id: z.string(),
+  title: z.string({
+    invalid_type_error: 'Please enter a post title.',
+  }),
+  slug: z.string({
+    invalid_type_error: 'Please enter a slug.',
+  }),
+  metaTitle: z.string({
+    invalid_type_error: 'Please enter a meta title.',
+  }),
+  metaDescription: z.string({
+    invalid_type_error: 'Please enter a meta description.',
+  }),
+  userId: z.string({
+    invalid_type_error: 'Please select a user.',
+  }),
+  headerImage: z.string(),
+});
  
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
+const CreatePost = PostFormSchema.omit({ id: true, headerImage: true, date: true });
 
 // This is temporary until @types/react-dom is updated
 export type State = {
@@ -123,6 +149,129 @@ export async function deleteInvoice(id: string) {
       message: 'Database Error: Failed to Delete Invoice.' 
     };
   }
+}
+
+export async function latestPostId(title) {
+
+  const postTitle = title;
+  // selecting latest post id
+  try {
+    const latestPostId = await sql<PostsForm>`
+      SELECT id from posts 
+      WHERE name = ${postTitle}`;
+
+    const id = latestPostId.rows.map((id) => ({
+      ...id,
+    }));
+    console.log(id[0]);
+    return id[0];
+  } catch (error) {
+    return {
+      message: 'Database Error: Failed to Select Post.',
+    };
+  }
+}
+
+export async function createPost(prevState: State, formData: FormData) {
+  
+  const fileHandler: File | null = formData.get('file') as unknown as File
+
+  if(!fileHandler) {
+    throw new Error('No file uploaded')
+  }
+
+  const bytes = await fileHandler.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+  // console.log(fileHandler)
+
+  try {
+    const path = join(process.env.ROOT_DIR || process.cwd(), '/public/uploads/', fileHandler.name)
+    await writeFile(path, buffer)
+    console.log('open ${path} to see the uploaded file')
+  } catch (e: any) {
+    console.error(e);
+    reject(e);
+    return;
+  }
+
+  // Validate form fields using Zod
+
+  const validatedFields = CreatePost.safeParse({
+    title: formData.get('title'),
+    slug: formData.get('slug'),
+    metaTitle: formData.get('meta-title'),
+    metaDescription: formData.get('meta-description'),
+    userId: formData.get('userId'),
+    headerImage: formData.get('file'),
+  });
+
+  // console.log(validatedFields)
+
+  // If form validation fails, return errors early. Otherwise, continue.
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Post.',
+    };
+  }
+
+  // Prepare data for insertion into the database
+  const { title, userId, slug, metaTitle, metaDescription, headerImage } = validatedFields.data;
+  const date = new Date().toISOString().split('T')[0];
+  
+  try {
+    await sql`
+      INSERT INTO posts (name, user_id, slug, date_created) 
+      VALUES (${title}, ${userId}, ${slug}, ${date})`;
+  } catch (error) {
+    return {
+      message: 'Database Error: Failed to Create Post.',
+    };
+  }
+
+  const lpId = await latestPostId(title);
+  console.log(lpId.id);
+  // console.log(fileHandler.name);
+  try {
+    await sql`
+      INSERT INTO post_meta (post_id, post_title, meta_title, meta_description, header_image_url)  
+      VALUES (${lpId.id}, ${title}, ${metaTitle}, ${metaDescription}, ${fileHandler.name})`;
+  } catch (error) {
+    return {
+      message: 'Database Error: Failed to Create Post Meta.',
+    };
+  }
+
+  revalidatePath('/dashboard/posts');
+  redirect('/dashboard/posts');
+}
+
+export async function deletePost(id: string) {
+  // throw error on purpose to trigger error handling
+  // throw new Error('Failed to Delete Invoice');
+  // console.log(id);
+  try {
+    await sql`DELETE
+      FROM posts a  
+      WHERE a.id = ${id}`;
+  } catch (error) {
+    return { 
+      message: 'Database Error: Failed to Delete Post.' 
+    };
+  }
+
+  try {
+    await sql`DELETE
+      FROM post_meta a  
+      WHERE a.post_id = ${id}`;
+  } catch (error) {
+    return { 
+      message: 'Database Error: Failed to Delete Post Meta.' 
+    };
+  }
+
+  revalidatePath('/dashboard/posts');
+  redirect('/dashboard/posts');
 }
 
 export async function authenticate(
