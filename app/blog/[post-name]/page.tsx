@@ -9,7 +9,7 @@ import { Metadata } from 'next';
 import { getPost } from '@/app/lib/data';
 import { join } from 'path';
 
-export async function generateMetadata({ params }) {
+export async function generateMetadata({ params } : {params:any}) {
   const post = await getPost(params['post-name']);
 
   let metaTitle = 'Blog post';
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }) {
   };
 }
 
-export default async function Page({ params }) {
+export default async function Page({ params } : {params:any}) {
 
   const post = await getPost(params['post-name']);
 

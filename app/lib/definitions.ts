@@ -58,6 +58,7 @@ export type InvoicesTable = {
 export type PostsTable = {
   id: string;
   name: string;
+  headerImage: string
   // slug: string;
   // user_id: string;
   // date: string;
@@ -101,5 +102,13 @@ export type InvoiceForm = {
 };
 
 export type PostsForm = {
+  id: string;
+};
+
+export type PostMetaForm = {
+  post_id: string;
+}
+
+export type latestPost = {
   id: string;
 };

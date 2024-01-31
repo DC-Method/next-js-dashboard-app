@@ -10,7 +10,7 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as dateFn from 'date-fns';
 import mime from 'mime';
-import { PostsForm } from './definitions';
+import { PostsForm, PostMetaForm, latestPost } from './definitions';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -151,7 +151,7 @@ export async function deleteInvoice(id: string) {
   }
 }
 
-export async function latestPostId(title) {
+export async function latestPostId(title: string) {
 
   const postTitle = title;
   // selecting latest post id
@@ -190,8 +190,9 @@ export async function createPost(prevState: State, formData: FormData) {
     // console.log('open ${path} to see the uploaded file')
   } catch (e: any) {
     console.error(e);
-    reject(e);
-    return;
+    return {
+      message: 'Upload error: Failed to upload file.',
+    };
   }
 
   // Validate form fields using Zod
@@ -202,7 +203,6 @@ export async function createPost(prevState: State, formData: FormData) {
     metaTitle: formData.get('meta-title'),
     metaDescription: formData.get('meta-description'),
     userId: formData.get('userId'),
-    headerImage: formData.get('file'),
   });
 
   // console.log(validatedFields)
@@ -216,7 +216,7 @@ export async function createPost(prevState: State, formData: FormData) {
   }
 
   // Prepare data for insertion into the database
-  const { title, userId, slug, metaTitle, metaDescription, headerImage } = validatedFields.data;
+  const { title, userId, slug, metaTitle, metaDescription } = validatedFields.data;
   const date = new Date().toISOString().split('T')[0];
   
   try {
@@ -229,11 +229,14 @@ export async function createPost(prevState: State, formData: FormData) {
     };
   }
 
-  const lpId = await latestPostId(title);
+  // to do: set lpID.id as string in latestPostId return id[0] function
+
+  let lpId = {};
+  lpId = await latestPostId(title);
   // console.log(lpId.id);
-  // console.log(fileHandler.name);
+
   try {
-    await sql`
+    await sql<PostMetaForm>`
       INSERT INTO post_meta (post_id, post_title, meta_title, meta_description, header_image_url)  
       VALUES (${lpId.id}, ${title}, ${metaTitle}, ${metaDescription}, ${fileHandler.name})`;
   } catch (error) {
